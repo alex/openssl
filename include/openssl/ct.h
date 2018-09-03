@@ -306,6 +306,17 @@ sct_validation_status_t SCT_get_validation_status(const SCT *sct);
 __owur int SCT_validate(SCT *sct, const CT_POLICY_EVAL_CTX *ctx);
 
 /*
+ * Signs the given SCT, with the provided private key, for the provided X.509
+ * certificate. If the X.509 certificate is a pre-certificate then issuer_pkey
+ * must be the public key of the issuing CA, if it's not then it should be
+ * NULL.
+ * Returns 1 if the signature is successfully signed.
+ * Returns a negative integer if an error occurs
+ */
+__owur int SCT_sign(SCT *sct, EVP_PKEY *pkey, X509 *cert,
+                    X509 *issuer);
+
+/*
  * Validates the given list of SCTs with the provided context.
  * Sets the "validation_status" field of each SCT.
  * Returns 1 if there are no invalid SCTs and all signatures verify.

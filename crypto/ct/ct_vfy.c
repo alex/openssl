@@ -26,11 +26,12 @@ typedef enum sct_signature_type_t {
  * Update encoding for SCT signature verification/generation to supplied
  * EVP_MD_CTX.
  */
-static int sct_ctx_update(EVP_MD_CTX *ctx, const SCT_CTX *sctx, const SCT *sct)
+__owur int sct_ctx_update(EVP_MD_CTX *ctx, const SCT *sct,
+                          const unsigned char *ihash, int ihashlen,
+                          const unsigned char *certder, int certderlen)
 {
     unsigned char tmpbuf[12];
-    unsigned char *p, *der;
-    size_t derlen;
+    unsigned char *p;
     /*+
      * digitally-signed struct {
      *   (1 byte) Version sct_version;
@@ -46,7 +47,7 @@ static int sct_ctx_update(EVP_MD_CTX *ctx, const SCT_CTX *sctx, const SCT *sct)
      */
     if (sct->entry_type == CT_LOG_ENTRY_TYPE_NOT_SET)
         return 0;
-    if (sct->entry_type == CT_LOG_ENTRY_TYPE_PRECERT && sctx->ihash == NULL)
+    if (sct->entry_type == CT_LOG_ENTRY_TYPE_PRECERT && ihash == NULL)
         return 0;
 
     p = tmpbuf;
@@ -58,27 +59,18 @@ static int sct_ctx_update(EVP_MD_CTX *ctx, const SCT_CTX *sctx, const SCT *sct)
     if (!EVP_DigestUpdate(ctx, tmpbuf, p - tmpbuf))
         return 0;
 
-    if (sct->entry_type == CT_LOG_ENTRY_TYPE_X509) {
-        der = sctx->certder;
-        derlen = sctx->certderlen;
-    } else {
-        if (!EVP_DigestUpdate(ctx, sctx->ihash, sctx->ihashlen))
+    if (sct->entry_type == CT_LOG_ENTRY_TYPE_PRECERT) {
+        if (!EVP_DigestUpdate(ctx, ihash, ihashlen))
             return 0;
-        der = sctx->preder;
-        derlen = sctx->prederlen;
     }
-
-    /* If no encoding available, fatal error */
-    if (der == NULL)
-        return 0;
 
     /* Include length first */
     p = tmpbuf;
-    l2n3(derlen, p);
+    l2n3(certderlen, p);
 
     if (!EVP_DigestUpdate(ctx, tmpbuf, 3))
         return 0;
-    if (!EVP_DigestUpdate(ctx, der, derlen))
+    if (!EVP_DigestUpdate(ctx, certder, certderlen))
         return 0;
 
     /* Add any extensions */
@@ -96,7 +88,8 @@ static int sct_ctx_update(EVP_MD_CTX *ctx, const SCT_CTX *sctx, const SCT *sct)
 int SCT_CTX_verify(const SCT_CTX *sctx, const SCT *sct)
 {
     EVP_MD_CTX *ctx = NULL;
-    int ret = 0;
+    unsigned char *certder;
+    int ret = 0, certderlen;
 
     if (!SCT_is_complete(sct) || sctx->pkey == NULL ||
         sct->entry_type == CT_LOG_ENTRY_TYPE_NOT_SET ||
@@ -125,7 +118,15 @@ int SCT_CTX_verify(const SCT_CTX *sctx, const SCT *sct)
     if (!EVP_DigestVerifyInit(ctx, NULL, EVP_sha256(), NULL, sctx->pkey))
         goto end;
 
-    if (!sct_ctx_update(ctx, sctx, sct))
+    if (sct->entry_type == CT_LOG_ENTRY_TYPE_X509) {
+        certder = sctx->certder;
+        certderlen = sctx->certderlen;
+    } else {
+        certder = sctx->preder;
+        certderlen = sctx->prederlen;
+    }
+
+    if (!sct_ctx_update(ctx, sct, sctx->ihash, sctx->ihashlen, certder, certderlen))
         goto end;
 
     /* Verify signature */

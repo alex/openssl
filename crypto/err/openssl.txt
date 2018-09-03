@@ -396,6 +396,7 @@ CT_F_SCT_SET1_SIGNATURE:116:SCT_set1_signature
 CT_F_SCT_SET_LOG_ENTRY_TYPE:102:SCT_set_log_entry_type
 CT_F_SCT_SET_SIGNATURE_NID:103:SCT_set_signature_nid
 CT_F_SCT_SET_VERSION:104:SCT_set_version
+CT_F_SCT_SIGN:120:SCT_sign
 DH_F_COMPUTE_KEY:102:compute_key
 DH_F_DHPARAMS_PRINT_FP:101:DHparams_print_fp
 DH_F_DH_BUILTIN_GENPARAMS:106:dh_builtin_genparams
@@ -2048,9 +2049,13 @@ CT_R_LOG_CONF_INVALID_KEY:110:log conf invalid key
 CT_R_LOG_CONF_MISSING_DESCRIPTION:111:log conf missing description
 CT_R_LOG_CONF_MISSING_KEY:112:log conf missing key
 CT_R_LOG_KEY_INVALID:113:log key invalid
+CT_R_SCT_ENTRY_TYPE_MISMATCH:120:sct entry type mismatch
 CT_R_SCT_FUTURE_TIMESTAMP:116:sct future timestamp
 CT_R_SCT_INVALID:104:sct invalid
+CT_R_SCT_INVALID_KEY:117:sct invalid key
 CT_R_SCT_INVALID_SIGNATURE:107:sct invalid signature
+CT_R_SCT_ISSUER_PROVIDED:119:sct issuer provided
+CT_R_SCT_ISSUER_REQUIRED:118:sct issuer required
 CT_R_SCT_LIST_INVALID:105:sct list invalid
 CT_R_SCT_LOG_ID_MISMATCH:114:sct log id mismatch
 CT_R_SCT_NOT_SET:106:sct not set

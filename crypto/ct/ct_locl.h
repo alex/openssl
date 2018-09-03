@@ -210,6 +210,21 @@ __owur int i2o_SCT_signature(const SCT *sct, unsigned char **out);
 */
 __owur int o2i_SCT_signature(SCT *sct, const unsigned char **in, size_t len);
 
+/* Computes the log_id for a key. */
+__owur int ct_v1_log_id_from_pkey(EVP_PKEY *pkey,
+                                  unsigned char log_id[CT_V1_HASHLEN]);
+
+/* Writes data for signature computation/verification to the MD_CTX */
+__owur int sct_ctx_update(EVP_MD_CTX *ctx, const SCT *sct,
+                          const unsigned char *ihash, int ihashlen,
+                          const unsigned char *certder, int certderlen);
+
+/* Fixes up a pre-cert to match the form that an SCT's signature is over */
+__owur int ct_x509_cert_fixup(X509 *cert, X509 *presigner);
+
+__owur int ct_public_key_hash(X509_PUBKEY *pkey, unsigned char **hash,
+                              size_t *hash_len);
+
 /*
  * Handlers for Certificate Transparency X509v3/OCSP extensions
  */

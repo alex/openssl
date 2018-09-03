@@ -50,6 +50,7 @@ int ERR_load_CT_strings(void);
 #  define CT_F_SCT_SET_LOG_ENTRY_TYPE                      102
 #  define CT_F_SCT_SET_SIGNATURE_NID                       103
 #  define CT_F_SCT_SET_VERSION                             104
+#  define CT_F_SCT_SIGN                                    120
 
 /*
  * CT reason codes.
@@ -61,9 +62,13 @@ int ERR_load_CT_strings(void);
 #  define CT_R_LOG_CONF_MISSING_DESCRIPTION                111
 #  define CT_R_LOG_CONF_MISSING_KEY                        112
 #  define CT_R_LOG_KEY_INVALID                             113
+#  define CT_R_SCT_ENTRY_TYPE_MISMATCH                     120
 #  define CT_R_SCT_FUTURE_TIMESTAMP                        116
 #  define CT_R_SCT_INVALID                                 104
+#  define CT_R_SCT_INVALID_KEY                             117
 #  define CT_R_SCT_INVALID_SIGNATURE                       107
+#  define CT_R_SCT_ISSUER_PROVIDED                         119
+#  define CT_R_SCT_ISSUER_REQUIRED                         118
 #  define CT_R_SCT_LIST_INVALID                            105
 #  define CT_R_SCT_LOG_ID_MISMATCH                         114
 #  define CT_R_SCT_NOT_SET                                 106

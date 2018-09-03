@@ -70,7 +70,7 @@ static void ctlog_store_load_ctx_free(CTLOG_STORE_LOAD_CTX* ctx)
 }
 
 /* Converts a log's public key into a SHA256 log ID */
-static int ct_v1_log_id_from_pkey(EVP_PKEY *pkey,
+__owur int ct_v1_log_id_from_pkey(EVP_PKEY *pkey,
                                   unsigned char log_id[CT_V1_HASHLEN])
 {
     int ret = 0;

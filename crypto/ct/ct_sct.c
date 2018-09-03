@@ -11,6 +11,8 @@
 # error "CT disabled"
 #endif
 
+#include <string.h>
+
 #include <openssl/ct.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
@@ -393,4 +395,144 @@ int SCT_LIST_validate(const STACK_OF(SCT) *scts, CT_POLICY_EVAL_CTX *ctx)
     }
 
     return are_scts_valid;
+}
+
+int sct_is_ready_for_sign(SCT *sct) {
+    switch (sct->version) {
+    case SCT_VERSION_NOT_SET:
+        return 0;
+    case SCT_VERSION_V1:
+        return sct->sig == NULL &&
+            sct->hash_alg != TLSEXT_hash_none &&
+            sct->sig_alg != TLSEXT_signature_anonymous &&
+            sct->entry_type != CT_LOG_ENTRY_TYPE_NOT_SET;
+    default:
+        return 0;
+    }
+}
+
+int SCT_sign(SCT *sct, EVP_PKEY *pkey, X509 *cert, X509 *issuer) {
+    if (!sct_is_ready_for_sign(sct)) {
+        CTerr(CT_F_SCT_SIGN, CT_R_SCT_NOT_SET);
+        return -1;
+    }
+    unsigned char *signature = NULL;
+    int signature_nid = SCT_get_signature_nid(sct);
+    int pkey_type = EVP_PKEY_base_id(pkey);
+    /* Verify that the signature_nid matches the key we were passed's type. */
+    if (pkey_type == EVP_PKEY_EC) {
+        if (signature_nid != NID_ecdsa_with_SHA256 ||
+            EC_GROUP_get_curve_name(EC_KEY_get0_group(EVP_PKEY_get0_EC_KEY(pkey))) != NID_X9_62_prime256v1) {
+
+            CTerr(CT_F_SCT_SIGN, CT_R_SCT_INVALID_KEY);
+            return -1;
+        }
+    } else if (pkey_type == EVP_PKEY_RSA) {
+        if (signature_nid != NID_sha256WithRSAEncryption ||
+            RSA_size(EVP_PKEY_get0_RSA(pkey)) < 2048) {
+
+            CTerr(CT_F_SCT_SIGN, CT_R_SCT_INVALID_KEY);
+            return -1;
+        }
+    } else {
+        CTerr(CT_F_SCT_SIGN, CT_R_SCT_INVALID_KEY);
+        return -1;
+    }
+
+    /* Either verify that we have a correct log_id, or set the log_id. */
+    unsigned char log_id[CT_V1_HASHLEN];
+    if (!ct_v1_log_id_from_pkey(pkey, log_id)) {
+        return -1;
+    }
+    if (sct->log_id != NULL &&
+        (sct->log_id_len != CT_V1_HASHLEN || memcmp(sct->log_id, log_id, CT_V1_HASHLEN) != 0)
+    ) {
+        CTerr(CT_F_SCT_SIGN, CT_R_SCT_INVALID_KEY);
+        return -1;
+    } else if (sct->log_id == NULL) {
+        SCT_set1_log_id(sct, log_id, CT_V1_HASHLEN);
+    }
+
+    int poison_ext_idx = X509_get_ext_by_NID(cert, NID_ct_precert_poison, -1);
+    unsigned char *certder = NULL;
+    int certderlen = 0;
+    unsigned char *ihash = NULL;
+    size_t ihashlen = 0;
+    /* Verify that the existence of a CT pre-cert poison extension matches the
+     * sct claims the extension type is. */
+    if ((poison_ext_idx >= 0) != (sct->entry_type == CT_LOG_ENTRY_TYPE_PRECERT)) {
+        CTerr(CT_F_SCT_SIGN, CT_R_SCT_ENTRY_TYPE_MISMATCH);
+        return -1;
+    }
+    /*
+     * If we have a pre-cert, the SCT is signed over a slightly modified
+     * version of the TBSCertificate; see RFC 6962 for the precise algorithm.
+     */
+    if (poison_ext_idx >= 0) {
+        if (issuer == NULL) {
+            CTerr(CT_F_SCT_SIGN, CT_R_SCT_ISSUER_REQUIRED);
+            goto err;
+        }
+        X509 *precert = X509_dup(cert);
+        if (!precert) {
+            goto err;
+        }
+        X509_EXTENSION *ext = X509_delete_ext(precert, poison_ext_idx);
+        X509_EXTENSION_free(ext);
+        if (!ct_x509_cert_fixup(precert, issuer)) {
+            X509_free(precert);
+            goto err;
+        }
+        certderlen = i2d_re_X509_tbs(precert, &certder);
+        if (certderlen < 0) {
+            X509_free(precert);
+            goto err;
+        }
+        if (!ct_public_key_hash(X509_get_X509_PUBKEY(issuer), &ihash, &ihashlen)) {
+            X509_free(precert);
+            goto err;
+        }
+        X509_free(precert);
+    } else {
+        if (issuer != NULL) {
+            CTerr(CT_F_SCT_SIGN, CT_R_SCT_ISSUER_PROVIDED);
+            goto err;
+        }
+        certderlen = i2d_X509(cert, &certder);
+        if (certderlen < 0) {
+            goto err;
+        }
+    }
+
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    if (ctx == NULL) {
+        goto err;
+    }
+    if (!EVP_DigestSignInit(ctx, NULL, EVP_sha256(), NULL, pkey)) {
+        goto err;
+    }
+    if (!sct_ctx_update(ctx, sct, ihash, ihashlen, certder, certderlen)) {
+        goto err;
+    }
+    size_t signature_len;
+    if (!EVP_DigestSignFinal(ctx, NULL, &signature_len)) {
+        goto err;
+    }
+    signature = OPENSSL_malloc(signature_len);
+    if (!signature) {
+        goto err;
+    }
+    if (!EVP_DigestSignFinal(ctx, signature, &signature_len)) {
+        goto err;
+    }
+    SCT_set0_signature(sct, signature, signature_len);
+    OPENSSL_free(certder);
+    OPENSSL_free(ihash);
+    return 1;
+
+err:
+    OPENSSL_free(signature);
+    OPENSSL_free(certder);
+    OPENSSL_free(ihash);
+    return -1;
 }

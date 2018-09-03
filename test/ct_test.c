@@ -527,6 +527,52 @@ static int test_ctlog_from_base64(void)
         return 0;
     return 1;
 }
+
+static int test_sct_sign_precert(void)
+{
+    // TODO:
+    // 1) Get log key (RSA)
+    // 2) Make pre-cert
+    // 3) Issue SCT for pre-cert
+    // 4) Issue final cert with embedded SCT extension
+    // 5) Verify the final cert against the SCT
+    return 0;
+}
+
+static int test_sct_sign_certificate(void)
+{
+    // Generate a key for the log
+    EC_KEY *log_ec_key;
+    if (!TEST_ptr(log_ec_key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1))) {
+        return 0;
+    }
+    if (!TEST_int_eq(EC_KEY_generate_key(log_ec_key), 1)) {
+        return 0;
+    }
+    EVP_PKEY *log_key;
+    if (!TEST_ptr(log_key = EVP_PKEY_new())) {
+        return 0;
+    }
+    if (!TEST_int_eq(EVP_PKEY_set0_EC_KEY(log_key, log_ec_key), 1)) {
+        return 0;
+    }
+    // Get a cert
+    X509 *cert;
+    if (!TEST_ptr(cert = load_pem_cert(certs_dir, "leaf.pem"))) {
+        return 0;
+    }
+    // Issue+sign an SCT
+    SCT *sct;
+    if (!TEST_ptr(sct = SCT_new())) {
+        return 0;
+    }
+    if (!TEST_int_eq(SCT_sign(sct, log_key, cert, NULL), 1)) {
+        return 0;
+    }
+    // TODO:
+    // 4) Verify the cert against the SCT
+    return 0;
+}
 #endif
 
 int setup_tests(void)
@@ -547,6 +593,8 @@ int setup_tests(void)
     ADD_TEST(test_encode_tls_sct);
     ADD_TEST(test_default_ct_policy_eval_ctx_time_is_now);
     ADD_TEST(test_ctlog_from_base64);
+    ADD_TEST(test_sct_sign_precert);
+    ADD_TEST(test_sct_sign_certificate);
 #else
     printf("No CT support\n");
 #endif
